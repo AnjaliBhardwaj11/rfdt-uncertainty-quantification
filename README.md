@@ -44,25 +44,6 @@ You should use the SunLab repository to:
 
 The outputs from RF-3DGS are then consumed by the uncertainty pipeline provided
 in this repository.
-
----
-
-## Repository Structure
-
-.
-├── rfdt_forward.py
-├── rfdt_param_sensitivity_and_plot_SH_l6.py
-├── fit_density_uncertainty_sensitivity.py
-├── apply_density_uncertainty_sensitivity.py
-├── combine_param_sensitivity.py
-├── confidence_interval.py
-├── plot_uncertainty_visualization.py
-├── plot_uncertainty_visualization_presentation.py
-├── A_rx_forward_sweep.py
-└── data/
-└── README.md
-
-
 ---
 
 ## Data Directory
