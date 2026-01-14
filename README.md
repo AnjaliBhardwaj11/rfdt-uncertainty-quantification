@@ -78,14 +78,14 @@ pipeline.
 ---
 ## Scripts overview
 
-rfdt_forward.py: RF-DT forward prediction wrapper
-rfdt_param_sensitivity_and_plot_SH_l6.py: Parametric sensitivity computation using AD
-fit_density_uncertainty_sensitivity.py: Structural uncertainty calibration
-apply_density_uncertainty_sensitivity.py: Application of calibrated uncertainty
-combine_param_sensitivity.py: Combination of structural and parametric uncertainty
-confidence_interval.py: Beam-wise uncertainty interval construction
-plot_uncertainty_visualization*.py: Result visualization
-A_rx_forward_sweep.py: Receiver sweep for validation
+1. rfdt_forward.py: RF-DT forward prediction wrapper
+2. rfdt_param_sensitivity_and_plot_SH_l6.py: Parametric sensitivity computation using AD
+3. fit_density_uncertainty_sensitivity.py: Structural uncertainty calibration
+4. apply_density_uncertainty_sensitivity.py: Application of calibrated uncertainty
+5. combine_param_sensitivity.py: Combination of structural and parametric uncertainty
+6. confidence_interval.py: Beam-wise uncertainty interval construction
+7. plot_uncertainty_visualization*.py: Result visualization
+8. A_rx_forward_sweep.py: Receiver sweep for validation
 
 data/: Placeholder (see data/README.md)
 
