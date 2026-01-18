@@ -1,69 +1,101 @@
 # RF Digital Twin Uncertainty Modeling (Sensitivity-Aware)
 
-This repository contains the code accompanying our work on **sensitivity-aware uncertainty modeling for RF Digital Twins (RFDTs)** using RF-3D Gaussian Splatting (RF-3DGS).  
-The objective is to **quantify beam-wise predictive uncertainty** by propagating physically meaningful parameter sensitivities of the RFDT.
+This repository implements a **sensitivity-aware uncertainty modeling pipeline for RF Digital Twins (RFDTs)** built on RF-3D Gaussian Splatting (RF-3DGS).
 
-The pipeline is explicitly divided into **offline calibration** and **online deployment / evaluation**, reflecting practical RFDT usage.
+The code is organized around **two clearly separated stages**:
 
----
+- **Step 1: Offline calibration with high beam resolution**  
+  (used to *learn* and *fit* uncertainty behavior)
+- **Step 2: Deployment-time evaluation with DT beam resolution**  
+  (used to *apply* and *validate* uncertainty)
 
-## Repository Structure and Pipeline Overview
-
-The overall workflow consists of the following stages:
-
-1. **RFDT forward prediction**
-2. **Parametric sensitivity analysis (offline)**
-3. **Sensitivity aggregation**
-4. **Uncertainty fitting and propagation**
-5. **Oracle-based validation**
+The separation is intentional and reflects how an RFDT would be used in practice.
 
 ---
 
-## Script Descriptions and Execution Order
+## High-Level Pipeline Summary
 
-### A. RFDT Forward Modeling
+### Step 1: Offline Calibration (High Beam Resolution)
 
-#### `rfdt_forward.py`
+1. `A_rx_forward_sweep.py`  
+   Generates oracle MPC-based beam energies.
+
+2. `rfdt_forward.py`  
+   Runs RFDT forward prediction.
+
+3. `rfdt_param_sensitivity_and_plot_SH_l6.py`  
+   Computes parametric sensitivities (position / SH / opacity).
+
+4. `combine_param_sensitivity.py`  
+   Aggregates sensitivities into total beam-wise uncertainty.
+
+5. `fit_density_uncertainty_sensitivity.py`  
+   Fits uncertainty scaling parameters.
+
+### Step 2: Deployment & Validation (DT Beam Resolution)
+
+1. `rfdt_forward.py`  
+   Runs the RF Digital Twin forward model at the **deployment beam resolution**, producing beam-wise predicted energy.
+
+2. `rfdt_param_sensitivity_and_plot_SH_l6.py`  
+   Computes **beam-wise parametric sensitivities** (position / SH / opacity) at the deployment beam grid using first-order differentiation.
+
+3. `combine_param_sensitivity.py`  
+   Aggregates individual parameter sensitivities into a **total beam-wise sensitivity / uncertainty proxy** for the deployment setting.
+
+4. `apply_density_uncertainty_sensitivity.py`  
+   Applies the **uncertainty scaling learned during offline calibration** to obtain beam-wise uncertainty scales for deployment.
+
+5. `confidence_interval.py`  
+   Validates the sensitivity-aware uncertainty intervals against **oracle MPC-based beam energies**, reporting coverage, confidence statistics, and producing the main evaluation plots.
+
+---
+
+## Detailed Explanation of Each Step
+
+## Step 1: Offline Calibration (High Beam Resolution)
+
+This step is run **once per environment / RF-3DGS model**.  
+It is computationally expensive and should not be repeated during deployment.
+
+### 1. `A_rx_forward_sweep.py`
 **Purpose**  
-Runs the RF Digital Twin forward model to predict beam-wise received energy on the DT beam grid.
+Computes *oracle* beam energies using a **high-resolution beam grid** by aggregating individual MPC contributions.
 
-**Outputs**
-- `dt_outputs.pt`
-  - `E_hat`: predicted beam-wise energy (DT resolution)
+**Role in pipeline**
+- Acts as the *ground-truth oracle*
+- Provides fine-grained beam energy statistics
 
-**When to run**
-- Once per trained RF-3DGS scene
-- Required by all downstream scripts
-
----
-
-#### `A_rx_forward_sweep.py`
-**Purpose**  
-Computes oracle MPC-based beam energies by aggregating individual MPC contributions for a given receiver location.
-
-**Outputs**
+**Output**
 - `rx0_mpc.pt`
   - `c2`: per-MPC, per-beam power contributions
 
-**When to run**
-- Required for uncertainty validation
-- Can be rerun for different receiver locations
-
 ---
 
-### B. Parametric Sensitivity Analysis (Offline Calibration)
-
-These steps are **computationally expensive** and should be run **once per RFDT model**.
-
----
-
-#### `rfdt_param_sensitivity_and_plot_SH_l6.py`
+### 2. `rfdt_forward.py`
 **Purpose**  
-Computes beam-wise sensitivity of predicted log-energy with respect to a selected RFDT parameter block.
+Runs the RF Digital Twin forward model to predict beam-wise received energy.
+
+**Role in pipeline**
+- Generates RFDT predictions corresponding to the oracle beams
+
+**Output**
+- `dt_outputs.pt`
+  - `E_hat`: predicted beam-wise energy
+
+---
+
+### 3. `rfdt_param_sensitivity_and_plot_SH_l6.py`
+**Purpose**  
+Computes **beam-wise parametric sensitivity** of predicted log-energy.
+
+**How it works**
+- Uses automatic differentiation
+- Perturbs one parameter block at a time
 
 **Parameter blocks (run separately)**
 - `position`
-- `sh` (spherical harmonic coefficients, l ≤ 6)
+- `sh` (spherical harmonics, l ≤ 6)
 - `opacity`
 
 **Outputs**
@@ -72,124 +104,127 @@ Computes beam-wise sensitivity of predicted log-energy with respect to a selecte
 - `param_sensitivity_opacity_az33_el11.pt`
 
 Each file contains:
-- `var_logE`: beam-wise variance of log-energy due to that parameter
-
-**When to run**
-- Run **three times**, once per parameter block
+- `var_logE`: variance of log-energy per beam
 
 ---
 
-#### `combine_param_sensitivity.py`
+### 4. `combine_param_sensitivity.py`
 **Purpose**  
-Aggregates individual parameter sensitivities and produces a **beam-wise parametric dominance plot**.
+Combines individual parameter sensitivities into a **total beam-wise sensitivity**.
 
-**Inputs**
-- `param_sensitivity_position_az33_el11.pt`
-- `param_sensitivity_sh_az33_el11.pt`
-- `param_sensitivity_opacity_az33_el11.pt`
+**Role in pipeline**
+- Aggregates contributions from:
+  - Geometry (position)
+  - Angular scattering (SH)
+  - Attenuation (opacity)
 
 **Outputs**
 - `param_sensitivity_total_az33_el11.pt`
-- Plot: *Beam-wise parametric sensitivity comparison*
+- Beam-wise parametric sensitivity comparison plot
 
-This plot demonstrates that:
-- Position perturbations dominate uncertainty
-- SH coefficients contribute secondary effects
-- Opacity has negligible impact
-
-**When to run**
-- Once after all three sensitivity files are available
+This plot shows that **position dominates uncertainty**, justifying beam-wise modeling.
 
 ---
 
-### C. Uncertainty Modeling
-
-#### `fit_density_uncertainty_sensitivity.py`
+### 5. `fit_density_uncertainty_sensitivity.py`
 **Purpose**  
-Fits a mapping from combined sensitivity magnitude to uncertainty scale parameters.
+Fits a mapping from total sensitivity magnitude to an uncertainty scale.
 
-**Outputs**
+**Role in pipeline**
+- Learns how sensitivity translates to predictive uncertainty
+- Produces parameters reused during deployment
+
+**Output**
 - `beam_uncertainty_params_sensitivity.pt`
 
-**When to run**
-- Offline calibration
-- Once per RFDT model
+---
+
+## Step 2: Deployment & Validation (DT Beam Resolution)
+
+This step represents **online RFDT usage** at the deployment beam resolution.
 
 ---
 
-#### `apply_density_uncertainty_sensitivity.py`
+### 1. `rfdt_forward.py`
 **Purpose**  
-Applies the fitted uncertainty model to DT predictions to generate beam-wise uncertainty scales.
+Predicts beam-wise energy on the **DT beam grid**.
+
+**Output**
+- `dt_outputs.pt`
+
+---
+
+### 2. `rfdt_param_sensitivity_and_plot_SH_l6.py`
+**Purpose**  
+Computes parametric sensitivities **at deployment resolution**.
+
+**Role in pipeline**
+- Reuses the same sensitivity formulation
+- Now evaluated on DT beams instead of high-resolution beams
 
 **Outputs**
+- `param_sensitivity_*.pt` (DT resolution)
+
+---
+
+### 3. `combine_param_sensitivity.py`
+**Purpose**  
+Aggregates sensitivities to obtain deployment-time beam-wise uncertainty proxies.
+
+**Output**
+- `param_sensitivity_total_az33_el11.pt`
+
+---
+
+### 4. `apply_density_uncertainty_sensitivity.py`
+**Purpose**  
+Applies the uncertainty model learned in Step 1 to DT predictions.
+
+**Role in pipeline**
+- Converts sensitivity magnitudes into uncertainty intervals
+
+**Output**
 - `dt_uncertainty_beam_sensitivity.pt`
   - `E_hat`: predicted energy
   - `q_total`: beam-wise uncertainty scale
 
-**When to run**
-- Once after fitting
-- Used during online validation
-
 ---
 
-### D. Online Validation and Visualization
-
-#### `confidence_interval.py`
+### 5. `confidence_interval.py`
 **Purpose**  
-Validates sensitivity-aware uncertainty intervals against oracle MPC-based beam energies.
+Validates sensitivity-aware uncertainty against oracle MPC-based energies.
 
-**What it performs**
-- Projects oracle energies onto DT beam grid
-- Evaluates empirical coverage vs oracle MPC count
-- Computes beam-wise confidence
-- Visualizes:
-  - Sensitivity-aware uncertainty intervals
-  - Beam-wise uncertainty width
+**What it evaluates**
+- Empirical coverage vs oracle MPC count
+- Beam-wise confidence
+- Sensitivity-aware uncertainty interval visualization
+- Uncertainty width across beams
 
-**Inputs**
-- `dt_uncertainty_beam_sensitivity.pt`
-- `rx0_mpc.pt`
-
-**When to run**
-- Online / evaluation stage
-- Can be rerun with different MPC budgets or uncertainty scales
+This script produces the **main validation figures** used in the paper.
 
 ---
 
-## Offline vs Online Summary
+## Key Design Principles
 
-### Offline (Run Once per Scene)
-- `rfdt_forward.py`
-- `rfdt_param_sensitivity_and_plot_SH_l6.py` (×3: position, SH, opacity)
-- `combine_param_sensitivity.py`
-- `fit_density_uncertainty_sensitivity.py`
-- `apply_density_uncertainty_sensitivity.py`
+- **Offline / online separation**  
+  Expensive calibration is done once; deployment remains lightweight.
 
-### Online / Evaluation
-- `A_rx_forward_sweep.py`
-- `confidence_interval.py`
+- **Beam-wise uncertainty**  
+  Uncertainty is not uniform and varies significantly across beams.
 
----
+- **Physical interpretability**  
+  Dominant uncertainty sources are explicitly identified (geometry > SH > opacity).
 
-## Key Experimental Outputs
-
-The core results of this repository are:
-
-1. **Beam-wise parametric sensitivity comparison**  
-   (from `combine_param_sensitivity.py`)
-
-2. **Sensitivity-aware uncertainty interval visualization**  
-   (from `confidence_interval.py`)
-
-Together, these demonstrate physically grounded, beam-dependent uncertainty modeling in RF Digital Twins.
+- **Log-energy domain modeling**  
+  Ensures numerical stability and multiplicative uncertainty handling.
 
 ---
 
 ## Notes
 
-- DT beam grid resolution: **AZ = 33, EL = 11**
+- DT beam grid: **AZ = 33, EL = 11**
+- Oracle beam grid: higher resolution (e.g., AZ = 72, EL = 24)
 - SH expansion truncated at **l ≤ 6**
-- Uncertainty is modeled in the **log-energy domain**
 - Assumes a trained RF-3DGS point cloud as input
 
 ---
@@ -200,4 +235,4 @@ If you use this code, please cite the corresponding paper (to be updated upon pu
 
 ---
 
-This repository is intentionally focused on **interpretability and physical consistency** rather than system-level performance benchmarking.
+This repository is intentionally focused on **physically grounded uncertainty modeling** rather than end-to-end communication system optimization.
