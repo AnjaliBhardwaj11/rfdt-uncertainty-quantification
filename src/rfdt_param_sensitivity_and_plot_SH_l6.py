@@ -12,7 +12,7 @@ AZ = 33
 EL = 11
 BEAM_BATCH_SIZE = 32
 
-PARAM_BLOCK = "position"    # "position" | "opacity" | "sh"
+PARAM_BLOCK = "sh"    # "position" | "opacity" | "sh"
 
 SIGMA_POS = 0.02      # meters
 SIGMA_OPACITY = 0.2   # log-opacity std
@@ -58,7 +58,7 @@ def load_ply(path):
         dtype=torch.float32, device=DEVICE
     )
 
-    assert sh.shape[1] >= 48,
+    assert sh.shape[1] >= 48
 
     return means, alpha, sh
 
@@ -68,6 +68,7 @@ means, alpha, sh = load_ply(PLY_PATH)
 means.requires_grad_(PARAM_BLOCK == "position")
 alpha.requires_grad_(PARAM_BLOCK == "opacity")
 sh.requires_grad_(PARAM_BLOCK == "sh")
+
 
 def double_factorial(n):
     if n <= 0:
@@ -79,14 +80,10 @@ def double_factorial(n):
 
 
 def associated_legendre(l, m, x):
-
-    # P_m^m
     P_mm = ((-1.0)**m) * double_factorial(2*m - 1) * (1 - x**2)**(m / 2)
-
     if l == m:
         return P_mm
 
-    # P_{m+1}^m
     P_mmp1 = x * (2*m + 1) * P_mm
     if l == m + 1:
         return P_mmp1
@@ -105,22 +102,15 @@ def associated_legendre(l, m, x):
 
 
 def real_sh_l6(sh, dirs):
-
     x, y, z = dirs[:, 0], dirs[:, 1], dirs[:, 2]
     theta = torch.acos(torch.clamp(z, -1.0, 1.0))
     phi = torch.atan2(y, x)
-
     cos_t = torch.cos(theta)
-    N = dirs.shape[0]
 
     Y = []
-    idx = 0
-
-    for l in range(1, 7):  # l = 1..6
+    for l in range(1, 7):
         for m in range(-l, l + 1):
-
             P_lm = associated_legendre(l, abs(m), cos_t)
-
             K = math.sqrt(
                 (2*l + 1) / (4*math.pi)
                 * math.factorial(l - abs(m)) / math.factorial(l + abs(m))
@@ -134,12 +124,12 @@ def real_sh_l6(sh, dirs):
                 Y_lm = K * P_lm
 
             Y.append(Y_lm)
-            idx += 1
 
     Y = torch.stack(Y, dim=1)
     g = (sh[:, :48] * Y).sum(dim=1)
 
     return torch.abs(g)
+
 
 def generate_beams():
     d = lam / 2
@@ -172,6 +162,7 @@ coords = torch.tensor(
     device=DEVICE
 )
 
+
 def forward_log_energy(beam_idx):
     vec = means - RX
     dist = torch.linalg.norm(vec, dim=1)
@@ -188,6 +179,7 @@ def forward_log_energy(beam_idx):
 
     return torch.log(E + EPS)
 
+
 var_logE = torch.zeros(B, device=DEVICE)
 beam_ids = torch.arange(B, device=DEVICE)
 
@@ -195,22 +187,26 @@ for i in range(0, B, BEAM_BATCH_SIZE):
     batch = beam_ids[i:i + BEAM_BATCH_SIZE]
 
     logE = forward_log_energy(batch)
-    loss = logE.sum()
-    loss.backward()
 
-    if PARAM_BLOCK == "position":
-        var = (means.grad ** 2).sum() * SIGMA_POS**2
-        means.grad.zero_()
+    for j, b in enumerate(batch):
+        logE[j].backward(retain_graph=True)
 
-    elif PARAM_BLOCK == "opacity":
-        var = ((alpha.grad * alpha) ** 2).sum() * SIGMA_OPACITY**2
-        alpha.grad.zero_()
+        if PARAM_BLOCK == "position":
+            grad = means.grad
+            var = (grad ** 2).sum() * SIGMA_POS**2
+            means.grad.zero_()
 
-    elif PARAM_BLOCK == "sh":
-        var = (sh.grad[:, :48] ** 2).sum() * SIGMA_SH**2
-        sh.grad.zero_()
+        elif PARAM_BLOCK == "opacity":
+            grad = alpha.grad * alpha
+            var = (grad ** 2).sum() * SIGMA_OPACITY**2
+            alpha.grad.zero_()
 
-    var_logE[batch] = var
+        elif PARAM_BLOCK == "sh":
+            grad = sh.grad[:, :48]
+            var = (grad ** 2).sum() * SIGMA_SH**2
+            sh.grad.zero_()
+
+        var_logE[b] = var
 
 out_file = f"param_sensitivity_{PARAM_BLOCK}_az{AZ}_el{EL}.pt"
 torch.save({"var_logE": var_logE}, out_file)

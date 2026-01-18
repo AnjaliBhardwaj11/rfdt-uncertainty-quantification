@@ -39,6 +39,7 @@ if S_med <= 0:
 
 s = S / S_med
 
+
 eps_all = []
 
 for K in K_LIST:

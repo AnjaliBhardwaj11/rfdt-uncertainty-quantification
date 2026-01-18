@@ -6,7 +6,7 @@ from scipy.special import sph_harm_y as sph_harm
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ---------------- constants ---------------
+# ---------------- constants ----------------
 c0 = 3e8
 FC = 28e9
 lam = c0 / FC
