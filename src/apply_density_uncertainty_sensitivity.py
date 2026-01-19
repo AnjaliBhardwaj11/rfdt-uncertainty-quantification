@@ -54,8 +54,8 @@ s = S / S_med
 
 q_total = q_beam * inflation * s
 
-E_lo = E_hat * torch.exp(mu - q_total)
-E_hi = E_hat * torch.exp(mu + q_total)
+E_lo = E_hat * torch.exp(- q_total)
+E_hi = E_hat * torch.exp(+ q_total)
 
 torch.save(
     {
