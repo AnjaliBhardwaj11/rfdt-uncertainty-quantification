@@ -41,10 +41,10 @@ sens = torch.load(
     map_location=DEVICE
 )
 
-var_pos = sens["var_logE_total"]
-assert var_pos.numel() == B, "Beam count mismatch"
+var_sen = sens["var_logE_total"]
+assert var_sen.numel() == B, "Beam count mismatch"
 
-S = torch.sqrt(var_pos)
+S = torch.sqrt(var_sen)
 S_med = torch.median(S)
 
 if S_med <= 0:
