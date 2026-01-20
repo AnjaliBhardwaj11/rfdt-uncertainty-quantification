@@ -24,7 +24,7 @@ mpc_idx = torch.argsort(mpc_power, descending=True)
 
 
 sens = torch.load(
-    "param_sensitivity_total_az72_el24.pt",
+    f"param_sensitivity_total_az{AZ_REF}_el{EL_REF}.pt",
     map_location=DEVICE
 )
 
