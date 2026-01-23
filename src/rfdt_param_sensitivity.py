@@ -8,11 +8,11 @@ from plyfile import PlyData
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-AZ = 33
-EL = 11
+AZ = 72
+EL = 24
 BEAM_BATCH_SIZE = 32
 
-PARAM_BLOCK = "sh"    # "position" | "opacity" | "sh"
+PARAM_BLOCK = "position"    # "position" | "opacity" | "sh"
 
 SIGMA_POS = 0.02      # meters
 SIGMA_OPACITY = 0.2   # log-opacity std
@@ -101,14 +101,22 @@ def associated_legendre(l, m, x):
     return P_lm
 
 
-def real_sh_l6(sh, dirs):
+def real_sh_l3(sh, dirs):
     x, y, z = dirs[:, 0], dirs[:, 1], dirs[:, 2]
     theta = torch.acos(torch.clamp(z, -1.0, 1.0))
     phi = torch.atan2(y, x)
     cos_t = torch.cos(theta)
 
     Y = []
-    for l in range(1, 7):
+
+    # l = 0 (DC)
+    l = 0
+    m = 0
+    K = math.sqrt(1 / (4 * math.pi))
+    Y.append(torch.full_like(cos_t, K))
+
+    # l = 1..3
+    for l in range(1, 4):
         for m in range(-l, l + 1):
             P_lm = associated_legendre(l, abs(m), cos_t)
             K = math.sqrt(
@@ -125,10 +133,17 @@ def real_sh_l6(sh, dirs):
 
             Y.append(Y_lm)
 
+    # Stack SH basis: (N, 16)
     Y = torch.stack(Y, dim=1)
-    g = (sh[:, :48] * Y).sum(dim=1)
 
-    return torch.abs(g)
+    # Combine 3 channels (exactly like RF-3DGS)
+    # sh reshaped to (N, 3, 16)
+    sh = sh.view(sh.shape[0], 3, 16)
+
+    # Field-domain directional gain (sum over SH)
+    g = (sh * Y[:, None, :]).sum(dim=2).norm(dim=1)
+
+    return g
 
 
 def generate_beams():
@@ -168,7 +183,7 @@ def forward_log_energy(beam_idx):
     dist = torch.linalg.norm(vec, dim=1)
     dirs = vec / dist[:, None]
 
-    g = real_sh_l6(sh, dirs)
+    g = real_sh_l3(sh, dirs)
     field = torch.sqrt(alpha) * g * torch.exp(-1j * k0 * dist)
 
     steer = torch.exp(1j * k0 * (dirs @ coords.T))
