@@ -154,7 +154,7 @@ Predicts beam-wise energy on the **DT beam grid**.
 
 ---
 
-### 2. `rfdt_param_sensitivity_and_plot_SH_l6.py`
+### 2. `rfdt_param_sensitivity.py`
 **Purpose**  
 Computes parametric sensitivities **at deployment resolution**.
 
