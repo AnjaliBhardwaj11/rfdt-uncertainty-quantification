@@ -65,12 +65,12 @@ std_opa = std_opa[order]
 
 plt.figure(figsize=(10, 4))
 plt.plot(std_pos, label="Position", linewidth=2)
-plt.plot(std_sh,  label="SH (l ≤ 6)", linewidth=2)
+plt.plot(std_sh,  label="SH (l ≤ 3)", linewidth=2)
 plt.plot(std_opa, label="Opacity", linewidth=2)
 
 plt.xlabel("Beam index")
 plt.ylabel("Std of log(E)")
-plt.title("Beam-wise parametric sensitivity comparison (AZ=33, EL=11)")
+plt.title("Beam-wise parametric sensitivity comparison")
 plt.grid(True, linestyle="--", alpha=0.4)
 plt.legend()
 plt.tight_layout()
